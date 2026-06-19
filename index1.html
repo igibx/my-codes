@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arquearia Selvagem - Edição 3D AAA</title>
+    <!-- Motores Gráfico e de Física -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Montserrat:wght@400;700;900&display=swap');
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #050b14;
+            font-family: 'Montserrat', sans-serif; touch-action: none;
+        }
+        #gameCanvas { display: block; width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1;}
+        
+        /* UI AAA */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: radial-gradient(circle at center, rgba(15,23,42,0.7) 0%, rgba(2,6,23,0.98) 100%);
+            backdrop-filter: blur(10px);
+            z-index: 100; transition: opacity 0.4s ease-in-out;
+            pointer-events: auto; /* Garante que os cliques são absorvidos */
+        }
+        .hidden { opacity: 0; pointer-events: none !important; }
+        
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 25px;
+            display: flex; justify-content: space-between; pointer-events: none; z-index: 50;
+        }
+        .hud-box {
+            background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.15); border-top: 1px solid rgba(255, 255, 255, 0.4);
+            padding: 12px 25px; border-radius: 16px; color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            font-size: 18px; font-weight: 700; pointer-events: auto;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .gold-text { color: #fbbf24; text-shadow: 0 0 15px rgba(251, 191, 36, 0.6); font-weight: 900; }
+        
+        .btn {
+            background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+            color: white; border: 1px solid #93c5fd; padding: 18px 50px;
+            font-size: 20px; font-weight: 900; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 8px 0 #1e3a8a, 0 15px 25px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.4);
+            transition: all 0.15s; margin: 10px; text-transform: uppercase; letter-spacing: 2px;
+            pointer-events: auto;
+        }
+        .btn:hover { filter: brightness(1.15); transform: translateY(-2px); box-shadow: 0 10px 0 #1e3a8a, 0 20px 30px rgba(0,0,0,0.6); }
+        .btn:active { transform: translateY(8px); box-shadow: 0 0 0 #1e3a8a; }
+        
+        .btn-shop { background: linear-gradient(180deg, #10b981, #047857); border-color: #6ee7b7; box-shadow: 0 8px 0 #064e3b, 0 15px 25px rgba(0,0,0,0.5), inset 0 2px 0 rgba(255,255,255,0.4); }
+        .btn-shop:hover { box-shadow: 0 10px 0 #064e3b, 0 20px 30px rgba(0,0,0,0.6); }
+        .btn-shop:active { box-shadow: 0 0 0 #064e3b; }
+
+        .hud-btn {
+            background: linear-gradient(135deg, #f59e0b, #b45309); cursor: pointer;
+            border: 1px solid #fcd34d; border-radius: 10px; padding: 10px 24px;
+            color: white; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4), inset 0 2px 0 rgba(255,255,255,0.3);
+            transition: all 0.2s; pointer-events: auto;
+        }
+        .hud-btn:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6); }
+        .hud-btn:active { transform: translateY(1px); }
+
+        .menu-box {
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.98) 100%);
+            padding: 50px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.15);
+            text-align: center; max-width: 700px; position: relative; overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,1), inset 0 1px 0 rgba(255,255,255,0.2);
+            pointer-events: auto;
+        }
+        h1 {
+            font-family: 'Cinzel', serif; font-size: 60px; margin: 0 0 15px 0;
+            background: linear-gradient(to bottom, #e0f2fe, #38bdf8);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0px 4px 15px rgba(56,189,248,0.5)); line-height: 1.1;
+        }
+        p { color: #94a3b8; font-size: 18px; margin-bottom: 40px; line-height: 1.6; }
+
+        .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 30px; }
+        .shop-item {
+            background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1);
+            padding: 20px; border-radius: 16px; text-align: left; transition: 0.3s;
+        }
+        .shop-item:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.4); background: rgba(30,41,59,0.9); }
+        .shop-item.owned { border-color: #10b981; }
+        .shop-item.equipped { border-color: #fbbf24; background: rgba(245, 158, 11, 0.15); box-shadow: inset 0 0 20px rgba(245, 158, 11, 0.2); }
+        .item-title { font-weight: 900; color: white; font-size: 20px; text-transform: uppercase; margin-bottom: 5px; }
+        .item-desc { font-size: 13px; color: #94a3b8; margin: 8px 0 15px 0; line-height: 1.4; }
+        .buy-btn {
+            background: #334155; color: white; border: 1px solid rgba(255,255,255,0.2); padding: 12px 15px;
+            border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; transition: 0.2s; text-transform: uppercase;
+        }
+        .buy-btn:hover { background: #475569; }
+        .shop-item.owned .buy-btn { background: linear-gradient(180deg, #3b82f6, #2563eb); border:none;}
+        .shop-item.equipped .buy-btn { background: linear-gradient(180deg, #f59e0b, #d97706); color: white; border:none;}
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+        <div class="hud-box">
+            <span>Nível: <span id="ui-level" style="color:#38bdf8;">1</span></span>
+            <span style="width: 2px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 10px;"></span>
+            <span>🏹 <span id="ui-arrows">3</span></span>
+        </div>
+        <div class="hud-box" style="flex-direction: column; align-items: center; padding: 5px 25px;">
+            <span style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Munição Atual</span>
+            <span id="ui-equipped" style="color: #e2e8f0; font-size: 18px;">Padrão</span>
+        </div>
+        <div class="hud-box">
+            <span class="gold-text">💰 <span id="ui-coins">0</span></span>
+            <span style="width: 2px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 10px;"></span>
+            <button id="btn-hud-shop" class="hud-btn">Arsenal</button>
+        </div>
+    </div>
+
+    <!-- MAIN MENU -->
+    <div id="main-menu" class="overlay">
+        <div class="menu-box">
+            <h1>Arquearia Selvagem 3D</h1>
+            <p>Destrua as estruturas, acumule tesouros e domine os elementos com seu arco longo.</p>
+            <button id="btn-start" class="btn">Iniciar Caçada</button>
+            <button id="btn-shop" class="btn btn-shop">Arsenal</button>
+        </div>
+    </div>
+
+    <!-- LEVEL COMPLETE / GAMEOVER MENU -->
+    <div id="level-menu" class="overlay hidden">
+        <div class="menu-box">
+            <h1 id="level-title">Vitória!</h1>
+            <p id="level-desc" style="font-size: 24px; color: #fbbf24; font-weight: bold;"></p>
+            <button id="btn-level" class="btn">Avançar</button>
+        </div>
+    </div>
+
+    <!-- SHOP MENU -->
+    <div id="shop-menu" class="overlay hidden">
+        <div class="menu-box" style="max-width: 800px; padding: 40px;">
+            <h1 style="font-size: 48px; margin-bottom: 5px;">Arsenal Real</h1>
+            <div style="color: #fbbf24; font-size: 20px; margin-bottom: 30px; font-weight:bold;">Tesouro Atual: <span id="shop-coins" style="font-size:28px;">0</span> 💰</div>
+            <div class="shop-grid" id="shop-container"></div>
+            <button id="btn-close-shop" class="btn">Voltar ao Campo</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GERENCIADOR DE EVENTOS DE UI (Robustez máxima contra falhas de navegador) ---
+        document.getElementById('btn-start').addEventListener('click', startGame);
+        document.getElementById('btn-shop').addEventListener('click', openShop);
+        document.getElementById('btn-hud-shop').addEventListener('click', openShop);
+        document.getElementById('btn-level').addEventListener('click', nextLevel);
+        document.getElementById('btn-close-shop').addEventListener('click', closeShop);
+
+        // --- MOTOR DE ÁUDIO SINTÉTICO (Lazy Loading) ---
+        let audioCtx = null;
+        function getAudio() {
+            if (!audioCtx) {
+                try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } 
+                catch(e) { console.warn("Audio disabled"); return null; }
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            return audioCtx;
+        }
+        
+        const Sfx = {
+            playTone: (freq, type, duration, vol=0.5, slideFreq=null) => {
+                let ctx = getAudio(); if(!ctx) return;
+                let osc = ctx.createOscillator(); let gain = ctx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                if (slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, ctx.currentTime + duration);
+                gain.gain.setValueAtTime(vol, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.start(); osc.stop(ctx.currentTime + duration);
+            },
+            playNoise: (duration, vol=0.5, type='white') => {
+                let ctx = getAudio(); if(!ctx) return;
+                let bufferSize = ctx.sampleRate * duration; let buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                let data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                let noise = ctx.createBufferSource(); noise.buffer = buffer;
+                let filter = ctx.createBiquadFilter(); filter.type = type === 'low' ? 'lowpass' : 'highpass'; filter.frequency.value = type === 'low' ? 600 : 2500;
+                let gain = ctx.createGain(); gain.gain.setValueAtTime(vol, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+                noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination); noise.start();
+            },
+            shoot: () => Sfx.playTone(120, 'triangle', 0.5, 0.8, 40),
+            hitWood: () => Sfx.playNoise(0.25, 0.7, 'low'), hitStone: () => Sfx.playTone(60, 'square', 0.15, 0.9, 30),
+            hitGlass: () => Sfx.playTone(1500, 'sine', 0.25, 0.5, 2500),
+            explosion: () => { Sfx.playNoise(1.0, 1.0, 'low'); Sfx.playTone(40, 'sawtooth', 0.8, 1.0, 10); },
+            coin: () => Sfx.playTone(1200, 'sine', 0.15, 0.4, 2000), animalHit: () => Sfx.playTone(180, 'sawtooth', 0.4, 0.6, 80),
+            freeze: () => Sfx.playTone(900, 'sine', 0.6, 0.6, 200), fire: () => Sfx.playNoise(0.6, 0.4, 'low')
+        };
+
+        // --- SISTEMA DE LOJA ---
+        let coins = 0;
+        const arrowsData = {
+            'normal': { name: 'Flecha de Ferro', desc: 'Confiável, afiada e aerodinâmica.', price: 0, colorStr: '#e2e8f0', colorHex: 0xe2e8f0, owned: true },
+            'fire': { name: 'Flecha Incendiária', desc: 'Queima estruturas de madeira.', price: 200, colorStr: '#f97316', colorHex: 0xf97316, owned: false },
+            'ice': { name: 'Flecha Glacial', desc: 'Transforma alvos em vidro frágil.', price: 300, colorStr: '#38bdf8', colorHex: 0x38bdf8, owned: false },
+            'explosive': { name: 'Ponta de Pólvora', desc: 'Detona no impacto!', price: 600, colorStr: '#ef4444', colorHex: 0xef4444, owned: false },
+            'split': { name: 'Disparo Espectral', desc: 'Toque na tela voando para dividir.', price: 1000, colorStr: '#a855f7', colorHex: 0xa855f7, owned: false }
+        };
+        let equippedArrow = 'normal';
+
+        function updateShopUI() {
+            document.getElementById('shop-coins').innerText = coins; document.getElementById('ui-coins').innerText = coins;
+            document.getElementById('ui-equipped').innerText = arrowsData[equippedArrow].name; document.getElementById('ui-equipped').style.color = arrowsData[equippedArrow].colorStr;
+            const container = document.getElementById('shop-container'); container.innerHTML = '';
+            for (let key in arrowsData) {
+                let item = arrowsData[key]; let isEquipped = (equippedArrow === key);
+                let btnText = isEquipped ? 'Equipado' : (item.owned ? 'Equipar' : `Comprar - ${item.price} 💰`);
+                let classes = `shop-item ${item.owned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}`;
+                container.innerHTML += `<div class="${classes}"><div class="item-title" style="color: ${item.colorStr}">${item.name}</div><div class="item-desc">${item.desc}</div><button class="buy-btn" onclick="handleShopClick('${key}')">${btnText}</button></div>`;
+            }
+        }
+        
+        window.handleShopClick = function(key) {
+            let item = arrowsData[key];
+            if (item.owned) { equippedArrow = key; Sfx.playTone(800, 'sine', 0.1); } 
+            else if (coins >= item.price) { coins -= item.price; item.owned = true; equippedArrow = key; Sfx.coin(); } 
+            else { Sfx.playTone(150, 'sawtooth', 0.2, 0.5, 100); }
+            updateShopUI();
+        }
+
+        // --- INTEGRAÇÃO MATTER.JS E THREE.JS ---
+        const { Engine, Runner, World, Bodies, Body, Constraint, Events, Vector, Query } = Matter;
+        let engine, world, runner;
+        let scene, camera, renderer, raycaster, mousePlane;
+        
+        const GROUND_Y = 1000; const BOW_X = 500; const BOW_Y = 850;
+        
+        let gameState = 'start'; let level = 1; let arrowsLeft = 3; let enemiesLeft = 0;
+        let hasSplitUsed = false; let isLevelSettling = true; let levelFarthestX = 0;
+        let isDragging = false;
+        
+        let ground, bowAnchor, currentArrowBody = null;
+        let entities = [], arrowTrails = [], particles = [], bodiesToRemove = [];
+        const CAT_DEFAULT = 0x0001, CAT_ARROW = 0x0002;
+
+        let targetCameraX = 0, targetCameraY = 0, targetCameraZ = 1500;
+        let stringLine, bowGroup;
+
+        // Gerar Texturas Base (High-Res)
+        function createWoodTexture() {
+            let canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; let ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#5c4033'; ctx.fillRect(0,0,512,512); ctx.strokeStyle = '#3e2723'; ctx.lineWidth = 4;
+            for(let i=0; i<40; i++) { ctx.beginPath(); ctx.moveTo(0, i*15 + Math.random()*10); for(let x=0; x<=512; x+=40) ctx.lineTo(x, i*15 + Math.random()*10); ctx.stroke(); }
+            let tex = new THREE.CanvasTexture(canvas); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex;
+        }
+        function createStoneTexture() {
+            let canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; let ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#64748b'; ctx.fillRect(0,0,512,512); ctx.fillStyle = '#475569';
+            for(let i=0; i<800; i++) { ctx.beginPath(); ctx.arc(Math.random()*512, Math.random()*512, Math.random()*3+1, 0, Math.PI*2); ctx.fill(); }
+            let tex = new THREE.CanvasTexture(canvas); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; return tex;
+        }
+        const texWood = createWoodTexture(); const texStone = createStoneTexture();
+
+        function initSystems() {
+            // FÍSICA
+            engine = Engine.create(); world = engine.world; engine.gravity.y = 1.2;
+            ground = Bodies.rectangle(10000, GROUND_Y, 20000, 100, { isStatic: true, friction: 1.0, label: 'ground', collisionFilter: { category: CAT_DEFAULT } });
+            World.add(world, ground);
+            
+            // GRÁFICOS 3D
+            scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x050b14, 2000, 6000);
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 1, 15000);
+            renderer = new THREE.WebGLRenderer({canvas: document.getElementById('gameCanvas'), antialias: true, powerPreference: "high-performance"});
+            renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            // Iluminação
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            let sun = new THREE.DirectionalLight(0xffeedd, 1.3);
+            sun.position.set(1000, 3000, 2000); sun.castShadow = true;
+            sun.shadow.camera.left = -4000; sun.shadow.camera.right = 4000; sun.shadow.camera.top = 2000; sun.shadow.camera.bottom = -2000;
+            sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048; scene.add(sun);
+
+            // Fundo
+            let bg = new THREE.Mesh(new THREE.PlaneGeometry(50000, 20000), new THREE.MeshBasicMaterial({color: 0x050b14})); bg.position.z = -4000; scene.add(bg);
+            let groundMesh = new THREE.Mesh(new THREE.BoxGeometry(20000, 100, 1000), new THREE.MeshStandardMaterial({color: 0x064e3b, roughness: 1.0}));
+            groundMesh.position.set(10000, -GROUND_Y, 0); groundMesh.receiveShadow = true; scene.add(groundMesh);
+
+            // Arco em 3D Aprimorado
+            bowAnchor = { x: BOW_X, y: BOW_Y }; bowGroup = new THREE.Group();
+            let curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 130, 0), new THREE.Vector3(-80, 0, 0), new THREE.Vector3(0, -130, 0));
+            let bowGeo = new THREE.TubeGeometry(curve, 32, 10, 12, false);
+            let bowMesh = new THREE.Mesh(bowGeo, new THREE.MeshStandardMaterial({map: texWood, roughness: 0.6}));
+            bowMesh.castShadow = true; bowGroup.add(bowMesh);
+            bowGroup.position.set(BOW_X, -BOW_Y, 0); scene.add(bowGroup);
+
+            // Corda
+            let stringGeo = new THREE.BufferGeometry(); stringGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(9), 3));
+            stringLine = new THREE.Line(stringGeo, new THREE.LineBasicMaterial({color: 0xffffff, linewidth: 2})); scene.add(stringLine);
+
+            // Controle e Colisões Seguras
+            Events.on(engine, 'collisionStart', handleCollisions);
+            Events.on(engine, 'afterUpdate', cleanUpBodies);
+
+            mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); raycaster = new THREE.Raycaster();
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            const canvasEl = document.getElementById('gameCanvas');
+            canvasEl.addEventListener('pointerdown', e => {
+                let pos = getMouseWorldPos(e.clientX, e.clientY);
+                if (gameState === 'idle' && currentArrowBody) {
+                    if (Math.hypot(pos.x - currentArrowBody.position.x, pos.y - (-currentArrowBody.position.y)) < 250) { gameState = 'dragging'; isDragging = true; }
+                } else if (gameState === 'flying' && equippedArrow === 'split' && !hasSplitUsed) { activateSplitArrow(); }
+            });
+
+            canvasEl.addEventListener('pointermove', e => {
+                if(isDragging && gameState === 'dragging' && currentArrowBody) {
+                    let pos = getMouseWorldPos(e.clientX, e.clientY);
+                    let diff = { x: pos.x - bowAnchor.x, y: -pos.y - bowAnchor.y };
+                    let dist = Vector.magnitude(diff);
+                    if (dist > 200) Body.setPosition(currentArrowBody, Vector.add(bowAnchor, Vector.mult(Vector.normalise(diff), 200)));
+                    else Body.setPosition(currentArrowBody, {x: pos.x, y: -pos.y});
+                    Body.setAngle(currentArrowBody, Math.atan2(bowAnchor.y - currentArrowBody.position.y, bowAnchor.x - currentArrowBody.position.x));
+                }
+            });
+
+            window.addEventListener('pointerup', () => { if(isDragging && gameState === 'dragging') { isDragging = false; shootArrow(); } });
+
+            runner = Runner.create(); Runner.run(runner, engine);
+            requestAnimationFrame(gameLoop);
+        }
+
+        function getMouseWorldPos(cx, cy) {
+            let vec = new THREE.Vector2((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+            raycaster.setFromCamera(vec, camera); let target = new THREE.Vector3(); raycaster.ray.intersectPlane(mousePlane, target); return target;
+        }
+
+        // --- SISTEMA DE DANO E FÍSICA ---
+        function handleCollisions(event) {
+            event.pairs.forEach(pair => {
+                let bodyA = pair.bodyA, bodyB = pair.bodyB;
+                let isArrowA = bodyA.label === 'arrow', isArrowB = bodyB.label === 'arrow';
+                let arrow = isArrowA ? bodyA : (isArrowB ? bodyB : null);
+                let target = isArrowA ? bodyB : (isArrowB ? bodyA : null);
+
+                // Ignorar impactos da construção assentando, a menos que uma flecha já tenha batido.
+                if (isLevelSettling && !arrow) return;
+
+                let relVel = Vector.magnitude(Vector.sub(bodyA.velocity, bodyB.velocity));
+                if (relVel > 2.5) {
+                    let force = relVel * (bodyA.mass + bodyB.mass);
+                    if (bodyA.health) applyDamage(bodyA, force);
+                    if (bodyB.health) applyDamage(bodyB, force);
+                    
+                    let mat = bodyA.material || bodyB.material;
+                    if(mat === 'wood') Sfx.hitWood(); else if(mat === 'stone') Sfx.hitStone(); else if(mat === 'glass') Sfx.hitGlass();
+                    else if(bodyA.label === 'animal' || bodyB.label === 'animal') Sfx.animalHit();
+                }
+
+                if (arrow && target && arrow.speed > 3 && !arrow.hasTriggered) {
+                    if (arrow.arrowType === 'explosive') {
+                        arrow.hasTriggered = true; triggerExplosion(arrow.position); bodiesToRemove.push(arrow);
+                        if (currentArrowBody === arrow) advanceTurn(arrow);
+                    } 
+                    else if (arrow.arrowType === 'fire' && target.material === 'wood') { target.isOnFire = true; Sfx.fire(); }
+                    else if (arrow.arrowType === 'ice' && target.label === 'block') {
+                        target.material = 'glass'; target.health = Math.min(target.health, 30);
+                        target.renderMesh.material.color.setHex(0x7dd3fc); target.renderMesh.material.transparent = true; target.renderMesh.material.opacity = 0.5;
+                        Sfx.freeze(); createParticles(target.position.x, target.position.y, 0x38bdf8, 20);
+                    }
+                }
+            });
+        }
+
+        function triggerExplosion(pos) {
+            Sfx.explosion(); createParticles(pos.x, pos.y, 0xef4444, 50, 'explosion'); createParticles(pos.x, pos.y, 0xfbbf24, 30, 'explosion');
+            let bodies = Query.region(world.bodies, { min: {x: pos.x-200, y: pos.y-200}, max: {x: pos.x+200, y: pos.y+200} });
+            bodies.forEach(b => {
+                if (b.isStatic || b.label === 'ground' || b.label === 'arrow') return;
+                let forceDir = Vector.normalise(Vector.sub(b.position, pos)); let dist = Math.max(Vector.magnitude(Vector.sub(b.position, pos)), 10);
+                Body.applyForce(b, b.position, Vector.mult(forceDir, (300 / dist) * b.mass * 0.05));
+                if (b.health) applyDamage(b, 2500 / dist);
+            });
+        }
+
+        function activateSplitArrow() {
+            hasSplitUsed = true; Sfx.shoot(); let pos = currentArrowBody.position, vel = currentArrowBody.velocity;
+            bodiesToRemove.push(currentArrowBody);
+            for(let i = -1; i <= 1; i++) {
+                let newA = createArrow(pos.x, pos.y, 'normal'); Body.setVelocity(newA, { x: vel.x, y: vel.y + (i * 10) }); Body.setAngle(newA, Math.atan2(newA.velocity.y, newA.velocity.x));
+                if(i === 0) currentArrowBody = newA;
+            }
+            createParticles(pos.x, pos.y, 0xa855f7, 25);
+        }
+
+        function applyDamage(body, damage) {
+            if(!body.health) return;
+            body.health -= damage * (body.material === 'stone' ? 0.2 : (body.material === 'wood' ? 0.7 : 1.5)) * 4;
+            if (body.health < body.maxHealth * 0.4 && !body.isDamaged) {
+                body.isDamaged = true; if(body.renderMesh && body.renderMesh.material) body.renderMesh.material.color.lerp(new THREE.Color(0x330000), 0.6);
+            }
+            if (body.health <= 0 && !body.isDestroyed) {
+                body.isDestroyed = true; createParticles(body.position.x, body.position.y, body.renderMesh.material.color.getHex(), 20); bodiesToRemove.push(body);
+            }
+        }
+        
+        function cleanUpBodies() {
+            while(bodiesToRemove.length > 0) {
+                let b = bodiesToRemove.pop(); World.remove(world, b); if(b.renderMesh) scene.remove(b.renderMesh);
+                entities = entities.filter(e => e.id !== b.id);
+                if (b.label === 'animal') { enemiesLeft--; addCoins(b.coinValue); checkWinCondition(); } else if(b.label === 'block') { addCoins(2); }
+            }
+        }
+        
+        function addCoins(a) { coins += a; document.getElementById('ui-coins').innerText = coins; if(a>10) Sfx.coin(); }
+
+        // --- GERAÇÃO DE NÍVEIS ---
+        function clearScene() {
+            entities.forEach(e => { World.remove(world, e); if(e.renderMesh) scene.remove(e.renderMesh); }); entities = [];
+            arrowTrails.forEach(t => scene.remove(t.mesh)); arrowTrails = []; particles.forEach(p => scene.remove(p.mesh)); particles = [];
+            if(currentArrowBody) { World.remove(world, currentArrowBody); scene.remove(currentArrowBody.renderMesh); currentArrowBody = null; }
+        }
+
+        function generateLevel(lvl) {
+            clearScene();
+            level = lvl; document.getElementById('ui-level').innerText = level;
+            arrowsLeft = Math.min(3 + Math.floor(level / 2), 8); document.getElementById('ui-arrows').innerText = arrowsLeft;
+            enemiesLeft = 0; levelFarthestX = BOW_X + 1000;
+            isLevelSettling = true; setTimeout(() => { isLevelSettling = false; }, 800);
+
+            let startX = 1300; let spacing = 350 + (lvl * 35);
+            let numStructures = Math.min(3 + level, 8);
+            for (let i = 0; i < numStructures; i++) {
+                let x = startX + (i * spacing) + (Math.random() * 80 - 40);
+                levelFarthestX = Math.max(levelFarthestX, x); buildStructure(x, GROUND_Y - 50, lvl);
+            }
+            spawnArrow(); gameState = 'start';
+        }
+
+        function buildStructure(x, baseY, lvl) {
+            const mats = ['wood', 'wood', 'glass', 'stone']; let mat = mats[Math.min(Math.floor(Math.random() * (lvl+1)), 3)];
+            let bH = 100, bW = 20; let y1 = baseY - (bH/2); 
+            
+            createBlock(x - 45, y1, bW, bH, mat); createBlock(x + 45, y1, bW, bH, mat);
+            let roofY1 = baseY - bH - 10; createBlock(x, roofY1, 130, 20, mat); spawnAnimal(x, baseY, lvl);
+
+            if (Math.random() > 0.3 || lvl > 3) {
+                let mat2 = mats[Math.min(Math.floor(Math.random() * lvl), 3)]; let y2 = roofY1 - 10 - (bH/2);
+                createBlock(x - 20, y2, bW, bH, mat2); createBlock(x + 20, y2, bW, bH, mat2);
+                let roofY2 = y2 - (bH/2) - 10; createBlock(x, roofY2, 80, 20, mat2); spawnAnimal(x, roofY1 - 10, lvl);
+            }
+        }
+
+        function createBlock(x, y, w, h, matType) {
+            let hp = matType === 'stone' ? 450 : (matType === 'wood' ? 180 : 60);
+            let block = Bodies.rectangle(x, y, w, h, { label: 'block', material: matType, density: matType === 'stone' ? 0.015 : 0.003, friction: 0.9, health: hp, maxHealth: hp });
+            
+            let color = matType === 'stone' ? 0x94a3b8 : (matType === 'wood' ? 0x8b4513 : 0xbae6fd);
+            let mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, 40), new THREE.MeshStandardMaterial({ 
+                color: color, map: matType==='wood'?texWood:(matType==='stone'?texStone:null),
+                roughness: matType==='glass'?0.1:0.9, metalness: matType==='glass'?0.9:0.1, transparent: matType==='glass', opacity: matType==='glass'?0.4:1.0
+            }));
+            mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+            block.renderMesh = mesh; World.add(world, block); entities.push(block);
+        }
+
+        function spawnAnimal(x, baseSupportY, lvl) {
+            let rNum = Math.random(); let type = 'wolf'; if (lvl>2 && rNum>0.4) type = 'boar'; if (lvl>4 && rNum>0.8) type = 'bear';
+            let r = type === 'bear' ? 26 : (type === 'boar' ? 22 : 18); let hp = type === 'bear' ? 250 : (type === 'boar' ? 120 : 60);
+            let animal = Bodies.circle(x, baseSupportY - r, r, { label: 'animal', animalType: type, density: type === 'bear' ? 0.01 : 0.004, friction: 0.8, health: hp, maxHealth: hp, coinValue: hp });
+            
+            let group = new THREE.Group(); let c = type === 'bear' ? 0x78350f : (type === 'boar' ? 0x3f3f46 : 0x9ca3af);
+            let bodyM = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 1), new THREE.MeshStandardMaterial({color: c, roughness: 0.9})); bodyM.castShadow = true; group.add(bodyM);
+            let snout = new THREE.Mesh(new THREE.CylinderGeometry(r*0.4, r*0.5, r*0.8, 8), new THREE.MeshStandardMaterial({color: 0x111111})); snout.rotation.z = Math.PI/2; snout.position.x = r*0.7; group.add(snout);
+            let eyeM = new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 0.5});
+            let eye1 = new THREE.Mesh(new THREE.SphereGeometry(r*0.15), eyeM); eye1.position.set(r*0.6, r*0.3, r*0.3); group.add(eye1);
+            let eye2 = new THREE.Mesh(new THREE.SphereGeometry(r*0.15), eyeM); eye2.position.set(r*0.6, r*0.3, -r*0.3); group.add(eye2);
+            let earM = new THREE.MeshStandardMaterial({color: c});
+            let ear1 = new THREE.Mesh(new THREE.ConeGeometry(r*0.3, r*0.6, 4), earM); ear1.position.set(0, r*0.8, r*0.4); ear1.rotation.z = -Math.PI/8; group.add(ear1);
+            let ear2 = new THREE.Mesh(new THREE.ConeGeometry(r*0.3, r*0.6, 4), earM); ear2.position.set(0, r*0.8, -r*0.4); ear2.rotation.z = -Math.PI/8; group.add(ear2);
+            scene.add(group); animal.renderMesh = group; World.add(world, animal); entities.push(animal); enemiesLeft++;
+        }
+
+        function createArrow(x, y, type) {
+            let arrow = Bodies.rectangle(x, y, 90, 8, { label: 'arrow', arrowType: type, density: 0.015, frictionAir: 0.005, collisionFilter: { category: CAT_ARROW, mask: 0xFFFFFFFF } });
+            let group = new THREE.Group(); let c = arrowsData[type].colorHex; let tipC = type === 'fire' ? 0xef4444 : (type === 'ice' ? 0x38bdf8 : 0xd1d5db);
+            
+            let shaft = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 80, 16), new THREE.MeshStandardMaterial({color: 0x3e2723, roughness: 0.8})); shaft.rotation.z = Math.PI/2; group.add(shaft);
+            let tip = new THREE.Mesh(new THREE.ConeGeometry(5, 18, 4), new THREE.MeshStandardMaterial({color: tipC, metalness: 0.9, roughness: 0.2})); tip.position.x = 45; tip.rotation.z = -Math.PI/2; tip.rotation.x = Math.PI/4; group.add(tip);
+            let fMat = new THREE.MeshStandardMaterial({color: c, side: THREE.DoubleSide}); let fGeo = new THREE.PlaneGeometry(16, 8);
+            let f1 = new THREE.Mesh(fGeo, fMat); f1.position.set(-36, 4, 0); group.add(f1); let f2 = new THREE.Mesh(fGeo, fMat); f2.position.set(-36, -4, 0); group.add(f2);
+            let f3 = new THREE.Mesh(fGeo, fMat); f3.position.set(-36, 0, 4); f3.rotation.x = Math.PI/2; group.add(f3); let f4 = new THREE.Mesh(fGeo, fMat); f4.position.set(-36, 0, -4); f4.rotation.x = Math.PI/2; group.add(f4);
+            
+            scene.add(group); arrow.renderMesh = group; World.add(world, arrow); return arrow;
+        }
+
+        function spawnArrow() {
+            if (arrowsLeft <= 0) return; hasSplitUsed = false; currentArrowBody = createArrow(bowAnchor.x, bowAnchor.y, equippedArrow); gameState = 'idle';
+        }
+
+        function shootArrow() {
+            let diff = Vector.sub(bowAnchor, currentArrowBody.position); let distance = Vector.magnitude(diff);
+            if (distance > 20) {
+                Body.setVelocity(currentArrowBody, { x: 0, y: 0 }); Body.applyForce(currentArrowBody, currentArrowBody.position, Vector.mult(Vector.normalise(diff), distance * 0.0022 * currentArrowBody.mass));
+                Sfx.shoot(); gameState = 'flying'; arrowsLeft--; document.getElementById('ui-arrows').innerText = arrowsLeft;
+            } else { gameState = 'idle'; }
+        }
+
+        function advanceTurn(arrowObj) {
+            gameState = 'waiting'; setTimeout(() => { if(currentArrowBody === arrowObj) currentArrowBody = null; if (enemiesLeft > 0) { if (arrowsLeft > 0) spawnArrow(); else gameOver(); } }, 1500);
+        }
+
+        // --- UPDATE LOOP ---
+        function createParticles(x, y, cHex, count, type='normal') {
+            for(let i=0; i<count; i++) {
+                let s = Math.random()*8 + 4; let mesh = new THREE.Mesh(new THREE.BoxGeometry(s,s,s), new THREE.MeshStandardMaterial({color: cHex, emissive: type==='fire'?cHex:0x000000}));
+                mesh.position.set(x, -y, (Math.random()-0.5)*40); scene.add(mesh); particles.push({ mesh: mesh, vx: (Math.random()-0.5)*(type==='explosion'?35:15), vy: (Math.random()-0.5)*(type==='explosion'?35:15), vz: (Math.random()-0.5)*25, life: 1.0, type: type });
+            }
+        }
+
+        function gameLoop() {
+            // Câmera Dinâmica Aperfeiçoada (Cobre Eixo X e Y da Tela)
+            if (gameState === 'start' || gameState === 'idle') {
+                let pad = 400; let totW = (levelFarthestX + pad) - (BOW_X - pad);
+                targetCameraX = (BOW_X + levelFarthestX) / 2; targetCameraY = -GROUND_Y + 300; 
+                let aspect = window.innerWidth / window.innerHeight;
+                let vFOV = camera.fov * Math.PI / 180;
+                let hFOV = 2 * Math.atan( Math.tan( vFOV / 2 ) * aspect ); 
+                let distH = (totW / 2) / Math.tan(hFOV / 2);
+                let distV = (900) / Math.tan(vFOV / 2); // Garante que a altura também encaixe
+                targetCameraZ = Math.max(distH, distV, 1500);
+            } else if (gameState === 'dragging') {
+                targetCameraX = BOW_X + 200; targetCameraY = -BOW_Y + 100; targetCameraZ = 1300; 
+            } else if (gameState === 'flying' && currentArrowBody) {
+                targetCameraX = currentArrowBody.position.x; targetCameraY = -currentArrowBody.position.y; targetCameraZ = 1400; 
+            }
+            camera.position.x += (targetCameraX - camera.position.x) * 0.08;
+            camera.position.y += (targetCameraY - camera.position.y) * 0.08;
+            camera.position.z += (targetCameraZ - camera.position.z) * 0.08;
+            camera.lookAt(camera.position.x, camera.position.y, 0);
+
+            // Animar Corda
+            let posAttr = stringLine.geometry.attributes.position;
+            posAttr.setXYZ(0, BOW_X, -BOW_Y + 130, 0); posAttr.setXYZ(2, BOW_X, -BOW_Y - 130, 0);
+            if(gameState === 'dragging' && currentArrowBody) posAttr.setXYZ(1, currentArrowBody.position.x - 45, -currentArrowBody.position.y, 0);
+            else posAttr.setXYZ(1, BOW_X, -BOW_Y, 0);
+            posAttr.needsUpdate = true;
+
+            // Sincronizar Físicas
+            entities.forEach(b => {
+                if(b.renderMesh) {
+                    b.renderMesh.position.set(b.position.x, -b.position.y, 0); b.renderMesh.rotation.z = -b.angle;
+                    if(b.isOnFire && b.health > 0) { b.health -= 0.6; if(Math.random()<0.3) createParticles(b.position.x, b.position.y, 0xf97316, 1, 'fire'); if(b.health<=0 && !b.isDestroyed) { b.isDestroyed=true; applyDamage(b, 999); } }
+                }
+            });
+
+            if (currentArrowBody) {
+                currentArrowBody.renderMesh.position.set(currentArrowBody.position.x, -currentArrowBody.position.y, 0);
+                if (currentArrowBody.speed > 2) {
+                    Body.setAngle(currentArrowBody, Math.atan2(currentArrowBody.velocity.y, currentArrowBody.velocity.x)); currentArrowBody.renderMesh.rotation.z = -currentArrowBody.angle;
+                    if(currentArrowBody.speed > 6) {
+                        let tM = new THREE.Mesh(new THREE.SphereGeometry(5), new THREE.MeshBasicMaterial({color: arrowsData[currentArrowBody.arrowType].colorHex, transparent: true, opacity: 1}));
+                        tM.position.set(currentArrowBody.position.x - Math.cos(currentArrowBody.angle)*40, -currentArrowBody.position.y + Math.sin(currentArrowBody.angle)*40, 0); scene.add(tM); arrowTrails.push({mesh: tM, alpha: 1});
+                    }
+                }
+                let isOut = currentArrowBody.position.x > levelFarthestX + 1500 || currentArrowBody.position.x < -1000 || currentArrowBody.position.y > GROUND_Y + 100;
+                let isStopped = currentArrowBody.speed < 0.5 && Math.abs(currentArrowBody.angularVelocity) < 0.05;
+                if(gameState === 'flying' && (isOut || isStopped)) { if(!currentArrowBody.stopTimer) currentArrowBody.stopTimer = 0; if(++currentArrowBody.stopTimer > 60 || isOut) advanceTurn(currentArrowBody); }
+            }
+
+            arrowTrails.forEach(t => { t.alpha -= 0.05; t.mesh.material.opacity = t.alpha; }); arrowTrails = arrowTrails.filter(t => { if(t.alpha > 0) return true; scene.remove(t.mesh); return false; });
+            particles.forEach(p => { p.mesh.position.x += p.vx; p.mesh.position.y -= p.vy; p.mesh.position.z += p.vz; if(p.type === 'fire') { p.vy -= 0.1; p.mesh.position.x += (Math.random()-0.5)*3; } else p.vy += 0.5; p.life -= (p.type === 'explosion' ? 0.02 : 0.03); p.mesh.scale.setScalar(Math.max(0.001, p.life)); });
+            particles = particles.filter(p => { if(p.life > 0) return true; scene.remove(p.mesh); return false; });
+
+            renderer.render(scene, camera); requestAnimationFrame(gameLoop);
+        }
+
+        // --- FLUXOS DO JOGO ---
+        function checkWinCondition() { if (enemiesLeft <= 0 && gameState !== 'win') { gameState = 'win'; setTimeout(() => { let bns = arrowsLeft * 150; addCoins(bns); document.getElementById('level-title').innerText = 'Área Limpa!'; document.getElementById('level-desc').innerText = `+${bns} 💰 Ouro por munição poupada!`; document.getElementById('level-menu').classList.remove('hidden'); }, 1500); } }
+        function gameOver() { gameState = 'over'; document.getElementById('level-title').innerText = 'Fim da Caçada'; document.getElementById('level-title').style.background = 'linear-gradient(to bottom, #fca5a5, #ef4444)'; document.getElementById('level-desc').innerText = 'Munição Esgotada.'; document.getElementById('level-btn').innerText = 'Reagrupar'; document.getElementById('level-menu').classList.remove('hidden'); }
+        function startGame() { getAudio(); document.getElementById('main-menu').classList.add('hidden'); updateShopUI(); generateLevel(1); }
+        function nextLevel() { document.getElementById('level-menu').classList.add('hidden'); document.getElementById('level-title').style.background = 'linear-gradient(to bottom, #e0f2fe, #38bdf8)'; if(gameState === 'win') generateLevel(level + 1); else generateLevel(level); }
+        function openShop() { getAudio(); updateShopUI(); document.getElementById('shop-menu').classList.remove('hidden'); }
+        function closeShop() { document.getElementById('shop-menu').classList.add('hidden'); if (gameState === 'idle' && currentArrowBody && currentArrowBody.arrowType !== equippedArrow) { bodiesToRemove.push(currentArrowBody); spawnArrow(); } }
+
+        // Inicialização protegida
+        if(!window.gameInitialized) { window.gameInitialized = true; initSystems(); updateShopUI(); }
+    </script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arquearia Selvagem - Edição Premium</title>
+    <!-- Apenas Matter.js para física perfeita e super leve -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #0f172a;
+            font-family: 'Montserrat', sans-serif; touch-action: none;
+        }
+        #gameCanvas { display: block; width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 1;}
+        
+        /* UI Estilo Premium */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: radial-gradient(circle at center, rgba(15,23,42,0.8) 0%, rgba(2,6,23,0.98) 100%);
+            backdrop-filter: blur(8px);
+            z-index: 100; transition: opacity 0.3s ease;
+            pointer-events: auto;
+        }
+        .hidden { opacity: 0; pointer-events: none !important; }
+        
+        #hud {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 20px;
+            display: flex; justify-content: space-between; pointer-events: none; z-index: 50;
+        }
+        .hud-box {
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 20px; border-radius: 12px; color: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+            font-size: 16px; font-weight: 700; pointer-events: auto;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .gold-text { color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.4); font-weight: 900; }
+        
+        .btn {
+            background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+            color: white; border: 1px solid #93c5fd; padding: 15px 40px;
+            font-size: 18px; font-weight: 900; border-radius: 30px; cursor: pointer;
+            box-shadow: 0 6px 0 #1e3a8a, 0 10px 20px rgba(0,0,0,0.4);
+            transition: all 0.1s; margin: 10px; text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn:active { transform: translateY(6px); box-shadow: 0 0 0 #1e3a8a; }
+        
+        .hud-btn {
+            background: linear-gradient(135deg, #f59e0b, #b45309); cursor: pointer;
+            border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 18px;
+            color: white; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3); transition: all 0.1s; pointer-events: auto;
+        }
+        .hud-btn:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(245, 158, 11, 0); }
+
+        .menu-box {
+            background: rgba(30, 41, 59, 0.95); padding: 40px; border-radius: 20px; 
+            border: 1px solid rgba(255,255,255,0.1); text-align: center; max-width: 600px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+        }
+        h1 { font-size: 48px; margin: 0 0 15px 0; color: #e0f2fe; text-shadow: 0 2px 10px rgba(56,189,248,0.5); }
+        
+        .shop-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
+        .shop-item {
+            background: rgba(15,23,42,0.8); border: 1px solid rgba(255,255,255,0.1);
+            padding: 15px; border-radius: 12px; text-align: left; transition: 0.2s;
+        }
+        .shop-item.owned { border-color: #10b981; }
+        .shop-item.equipped { border-color: #fbbf24; background: rgba(245, 158, 11, 0.1); }
+        .item-title { font-weight: 900; color: white; font-size: 16px; text-transform: uppercase; margin-bottom: 5px; }
+        .item-desc { font-size: 12px; color: #94a3b8; margin: 5px 0 10px 0; line-height: 1.4; }
+        .buy-btn {
+            background: #334155; color: white; border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px;
+            border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; text-transform: uppercase;
+        }
+        .shop-item.owned .buy-btn { background: #3b82f6; border:none;}
+        .shop-item.equipped .buy-btn { background: #f59e0b; color: white; border:none;}
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Interface In-Game -->
+    <div id="hud">
+        <div class="hud-box">
+            <span>Nível: <span id="ui-level" style="color:#38bdf8;">1</span></span>
+            <span style="width: 1px; height: 15px; background: rgba(255,255,255,0.2); margin: 0 10px;"></span>
+            <span>🏹 <span id="ui-arrows">3</span></span>
+        </div>
+        <div class="hud-box" style="flex-direction: column; align-items: center; padding: 5px 20px;">
+            <span style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Munição Atual</span>
+            <span id="ui-equipped" style="color: #e2e8f0; font-size: 16px;">Padrão</span>
+        </div>
+        <div class="hud-box">
+            <span class="gold-text">💰 <span id="ui-coins">0</span></span>
+            <span style="width: 1px; height: 15px; background: rgba(255,255,255,0.2); margin: 0 10px;"></span>
+            <button class="hud-btn" onclick="window.openShop()">Arsenal</button>
+        </div>
+    </div>
+
+    <!-- Menus Overlay -->
+    <div id="level-menu" class="overlay hidden">
+        <div class="menu-box">
+            <h1 id="level-title">Vitória!</h1>
+            <p id="level-desc" style="font-size: 20px; color: #fbbf24; font-weight: bold; margin-bottom: 25px;"></p>
+            <button class="btn" onclick="window.nextLevel()">Avançar</button>
+        </div>
+    </div>
+
+    <div id="shop-menu" class="overlay hidden">
+        <div class="menu-box" style="max-width: 700px; padding: 30px;">
+            <h1 style="font-size: 36px; margin-bottom: 5px;">Arsenal</h1>
+            <div style="color: #fbbf24; font-size: 18px; margin-bottom: 20px; font-weight:bold;">Ouro: <span id="shop-coins">0</span> 💰</div>
+            <div class="shop-grid" id="shop-container"></div>
+            <button class="btn" onclick="window.closeShop()" style="margin-top: 10px;">Voltar ao Campo</button>
+        </div>
+    </div>
+
+    <script>
+        // --- MOTOR DE ÁUDIO SINTÉTICO SEGURO ---
+        let audioCtx = null;
+        function getAudio() {
+            if (!audioCtx) {
+                try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } 
+                catch(e) { return null; }
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+            return audioCtx;
+        }
+        
+        const Sfx = {
+            playTone: (freq, type, duration, vol=0.5, slideFreq=null) => {
+                let ctx = getAudio(); if(!ctx) return;
+                try {
+                    let osc = ctx.createOscillator(); let gain = ctx.createGain();
+                    osc.type = type; osc.frequency.setValueAtTime(freq, ctx.currentTime);
+                    if (slideFreq) osc.frequency.exponentialRampToValueAtTime(slideFreq, ctx.currentTime + duration);
+                    gain.gain.setValueAtTime(vol, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(); osc.stop(ctx.currentTime + duration);
+                } catch(e) {}
+            },
+            playNoise: (duration, vol=0.5, type='white') => {
+                let ctx = getAudio(); if(!ctx) return;
+                try {
+                    let bufferSize = ctx.sampleRate * duration; let buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                    let data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                    let noise = ctx.createBufferSource(); noise.buffer = buffer;
+                    let filter = ctx.createBiquadFilter(); filter.type = type === 'low' ? 'lowpass' : 'highpass'; filter.frequency.value = type === 'low' ? 600 : 2500;
+                    let gain = ctx.createGain(); gain.gain.setValueAtTime(vol, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+                    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination); noise.start();
+                } catch(e){}
+            },
+            shoot: () => Sfx.playTone(120, 'triangle', 0.5, 0.8, 40),
+            hitWood: () => Sfx.playNoise(0.2, 0.6, 'low'), hitStone: () => Sfx.playTone(60, 'square', 0.1, 0.8, 30),
+            hitGlass: () => Sfx.playTone(1200, 'sine', 0.2, 0.4, 2000),
+            explosion: () => { Sfx.playNoise(0.8, 1.0, 'low'); Sfx.playTone(50, 'sawtooth', 0.7, 1.0, 10); },
+            coin: () => Sfx.playTone(1000, 'sine', 0.1, 0.3, 1500), animalHit: () => Sfx.playTone(180, 'sawtooth', 0.3, 0.5, 80),
+            freeze: () => Sfx.playTone(800, 'sine', 0.5, 0.5, 200), fire: () => Sfx.playNoise(0.5, 0.3, 'low')
+        };
+
+        // Inicia o áudio de forma invisível no primeiro toque no ecrã
+        window.addEventListener('pointerdown', function initAud() {
+            getAudio(); window.removeEventListener('pointerdown', initAud);
+        });
+
+        // --- SISTEMA DE LOJA ---
+        let coins = 0;
+        const arrowsData = {
+            'normal': { name: 'Flecha de Ferro', desc: 'Confiável, afiada e aerodinâmica.', price: 0, color: '#e2e8f0', owned: true },
+            'fire': { name: 'Flecha Incendiária', desc: 'Queima estruturas de madeira.', price: 200, color: '#f97316', owned: false },
+            'ice': { name: 'Flecha Glacial', desc: 'Transforma alvos em vidro frágil.', price: 300, color: '#38bdf8', owned: false },
+            'explosive': { name: 'Ponta de Pólvora', desc: 'Detona no impacto de forma devastadora!', price: 600, color: '#ef4444', owned: false },
+            'split': { name: 'Disparo Múltiplo', desc: 'Toque na tela a voar para dividir a flecha.', price: 1000, color: '#a855f7', owned: false }
+        };
+        let equippedArrow = 'normal';
+
+        function updateShopUI() {
+            document.getElementById('shop-coins').innerText = coins; document.getElementById('ui-coins').innerText = coins;
+            document.getElementById('ui-equipped').innerText = arrowsData[equippedArrow].name; document.getElementById('ui-equipped').style.color = arrowsData[equippedArrow].color;
+            const container = document.getElementById('shop-container'); container.innerHTML = '';
+            for (let key in arrowsData) {
+                let item = arrowsData[key]; let isEquipped = (equippedArrow === key);
+                let btnText = isEquipped ? 'Equipado' : (item.owned ? 'Equipar' : `Comprar (${item.price}💰)`);
+                let classes = `shop-item ${item.owned ? 'owned' : ''} ${isEquipped ? 'equipped' : ''}`;
+                container.innerHTML += `<div class="${classes}"><div class="item-title" style="color: ${item.color}">${item.name}</div><div class="item-desc">${item.desc}</div><button class="buy-btn" onclick="window.handleShopClick('${key}')">${btnText}</button></div>`;
+            }
+        }
+        
+        window.handleShopClick = function(key) {
+            let item = arrowsData[key];
+            if (item.owned) { equippedArrow = key; Sfx.playTone(800, 'sine', 0.1); } 
+            else if (coins >= item.price) { coins -= item.price; item.owned = true; equippedArrow = key; Sfx.coin(); } 
+            else { Sfx.playTone(150, 'sawtooth', 0.2, 0.5, 100); }
+            updateShopUI();
+        }
+
+        // --- INTEGRAÇÃO MATTER.JS E CANVAS 2D (Performance Máxima) ---
+        const { Engine, Runner, World, Bodies, Body, Constraint, Mouse, MouseConstraint, Events, Vector, Query } = Matter;
+        const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+        
+        let width, height, worldWidth;
+        let engine, world, runner, mouse, mouseConstraint;
+        let cameraX = 0, targetCameraX = 0;
+        
+        let gameState = 'start'; let level = 1; let arrowsLeft = 3; let enemiesLeft = 0;
+        let hasSplitUsed = false; let isLevelSettling = true;
+        
+        let ground, bowAnchor, currentArrowBody = null, bowString = null;
+        let entities = [], arrowTrails = [], particles = [];
+        const CAT_DEFAULT = 0x0001, CAT_ARROW = 0x0002;
+
+        function resizeCanvas() {
+            width = window.innerWidth; height = window.innerHeight; worldWidth = Math.max(width * 2.5, 2000);
+            canvas.width = width; canvas.height = height;
+            if (ground) {
+                Body.setPosition(ground, { x: worldWidth / 2, y: height - 25 });
+                Body.setVertices(ground, Bodies.rectangle(worldWidth / 2, height - 25, worldWidth, 50).vertices);
+            }
+            if (gameState === 'idle' || gameState === 'start') {
+                bowAnchor = { x: width * 0.15, y: height - 200 };
+                if (currentArrowBody && gameState === 'idle') {
+                    Body.setPosition(currentArrowBody, bowAnchor);
+                }
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Texturas procedurais otimizadas
+        const patterns = {};
+        function generateTextures() {
+            let wCanvas = document.createElement('canvas'); wCanvas.width = 64; wCanvas.height = 64; let wCtx = wCanvas.getContext('2d');
+            wCtx.fillStyle = '#78350f'; wCtx.fillRect(0,0,64,64); wCtx.strokeStyle = '#451a03'; wCtx.lineWidth = 1.5;
+            for(let i=0; i<8; i++) { wCtx.beginPath(); wCtx.moveTo(0, i*8 + Math.random()*4); for(let x=0; x<=64; x+=10) wCtx.lineTo(x, i*8 + Math.random()*4); wCtx.stroke(); }
+            patterns.wood = ctx.createPattern(wCanvas, 'repeat');
+
+            let sCanvas = document.createElement('canvas'); sCanvas.width = 64; sCanvas.height = 64; let sCtx = sCanvas.getContext('2d');
+            sCtx.fillStyle = '#475569'; sCtx.fillRect(0,0,64,64); sCtx.fillStyle = '#334155';
+            for(let i=0; i<100; i++) { sCtx.beginPath(); sCtx.arc(Math.random()*64, Math.random()*64, Math.random()*2+1, 0, Math.PI*2); sCtx.fill(); }
+            sCtx.strokeStyle = '#1e293b'; sCtx.beginPath(); sCtx.moveTo(10,10); sCtx.lineTo(30,20); sCtx.lineTo(25,40); sCtx.stroke();
+            patterns.stone = sCtx.createPattern(sCanvas, 'repeat');
+        }
+
+        function initSystems() {
+            resizeCanvas(); generateTextures();
+            engine = Engine.create(); world = engine.world; engine.gravity.y = 1.2;
+
+            ground = Bodies.rectangle(worldWidth / 2, height - 25, worldWidth, 50, { 
+                isStatic: true, friction: 1.0, label: 'ground', collisionFilter: { category: CAT_DEFAULT }
+            });
+            World.add(world, ground);
+
+            mouse = Mouse.create(canvas);
+            mouseConstraint = MouseConstraint.create(engine, {
+                mouse: mouse, constraint: { stiffness: 0.1, render: { visible: false } },
+                collisionFilter: { mask: CAT_ARROW } // Só afeta a flecha
+            });
+            World.add(world, mouseConstraint);
+            mouse.element.removeEventListener("mousewheel", mouse.mousewheel);
+            mouse.element.removeEventListener("DOMMouseScroll", mouse.mousewheel);
+
+            Events.on(engine, 'beforeUpdate', () => {
+                Mouse.setOffset(mouse, { x: cameraX, y: 0 }); // Câmara dinâmica
+                
+                if (gameState === 'flying' && currentArrowBody) targetCameraX = currentArrowBody.position.x - width * 0.4;
+                else if (gameState === 'idle' || gameState === 'dragging') targetCameraX = 0;
+                
+                targetCameraX = Math.max(0, Math.min(targetCameraX, worldWidth - width));
+                cameraX += (targetCameraX - cameraX) * 0.08;
+
+                if (gameState === 'dragging' && currentArrowBody) {
+                    const maxStretch = 160; 
+                    let diff = Vector.sub(currentArrowBody.position, bowAnchor);
+                    let dist = Vector.magnitude(diff);
+                    if (dist > maxStretch) {
+                        Body.setPosition(currentArrowBody, Vector.add(bowAnchor, Vector.mult(Vector.normalise(diff), maxStretch)));
+                    }
+                    Body.setVelocity(currentArrowBody, { x: 0, y: 0 }); Body.setAngularVelocity(currentArrowBody, 0);
+                    Body.setAngle(currentArrowBody, Math.atan2(diff.y, diff.x) + Math.PI);
+                }
+
+                world.bodies.forEach(b => {
+                    if (b.label === 'arrow' && b.speed > 2) Body.setAngle(b, Math.atan2(b.velocity.y, b.velocity.x));
+                    if (b.isOnFire && b.health > 0) {
+                        b.health -= 0.6; if(Math.random() < 0.2) createParticles(b.position.x, b.position.y, '#f97316', 1, 'fire');
+                        if (b.health <= 0) destroyEntity(b);
+                    }
+                });
+            });
+
+            Events.on(engine, 'collisionStart', handleCollisions);
+            Events.on(mouseConstraint, 'startdrag', (e) => { if (gameState === 'idle' && e.body.label === 'arrow') gameState = 'dragging'; });
+            Events.on(mouseConstraint, 'enddrag', (e) => { if (gameState === 'dragging' && e.body.label === 'arrow') shootArrow(); });
+
+            window.addEventListener('pointerdown', (e) => {
+                if(e.target.tagName === 'BUTTON') return;
+                if (gameState === 'flying' && equippedArrow === 'split' && !hasSplitUsed && currentArrowBody) activateSplitArrow();
+            });
+
+            runner = Runner.create(); Runner.run(runner, engine);
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- SISTEMA DE DANO SEGURO ---
+        function handleCollisions(event) {
+            if (isLevelSettling) return; 
+
+            event.pairs.forEach(pair => {
+                let bodyA = pair.bodyA, bodyB = pair.bodyB;
+                let isArrowA = bodyA.label === 'arrow', isArrowB = bodyB.label === 'arrow';
+                let arrow = isArrowA ? bodyA : (isArrowB ? bodyB : null);
+                let target = isArrowA ? bodyB : (isArrowB ? bodyA : null);
+
+                let relVel = Vector.magnitude(Vector.sub(bodyA.velocity, bodyB.velocity));
+                if (relVel > 2.5) { 
+                    let force = relVel * (bodyA.mass + bodyB.mass);
+                    if (bodyA.health) applyDamage(bodyA, force);
+                    if (bodyB.health) applyDamage(bodyB, force);
+                    
+                    let mat = bodyA.material || bodyB.material;
+                    if(mat === 'wood') Sfx.hitWood(); else if(mat === 'stone') Sfx.hitStone(); else if(mat === 'glass') Sfx.hitGlass();
+                    else if(bodyA.label === 'animal' || bodyB.label === 'animal') Sfx.animalHit();
+                }
+
+                if (arrow && target && arrow.speed > 3 && !arrow.hasTriggered) {
+                    if (arrow.arrowType === 'explosive') {
+                        arrow.hasTriggered = true; 
+                        // Correção Mágica: Assíncrono para evitar crash do Matter.js
+                        setTimeout(() => {
+                            triggerExplosion(arrow.position); 
+                            World.remove(world, arrow);
+                            if (currentArrowBody === arrow) advanceTurn(arrow);
+                        }, 0);
+                    } 
+                    else if (arrow.arrowType === 'fire' && target.material === 'wood') {
+                        target.isOnFire = true; Sfx.fire();
+                    }
+                    else if (arrow.arrowType === 'ice' && target.label === 'block') {
+                        target.material = 'glass'; target.health = Math.min(target.health, 30);
+                        target.renderColor = '#7dd3fc'; Sfx.freeze();
+                        createParticles(target.position.x, target.position.y, '#38bdf8', 20);
+                    }
+                }
+            });
+        }
+
+        function triggerExplosion(pos) {
+            Sfx.explosion(); createParticles(pos.x, pos.y, '#ef4444', 50, 'explosion'); createParticles(pos.x, pos.y, '#fbbf24', 20, 'explosion');
+            let bodies = Query.region(world.bodies, { min: {x: pos.x-180, y: pos.y-180}, max: {x: pos.x+180, y: pos.y+180} });
+            bodies.forEach(b => {
+                if (b.isStatic || b.label === 'ground' || b.label === 'arrow') return;
+                let forceDir = Vector.normalise(Vector.sub(b.position, pos)); let dist = Math.max(Vector.magnitude(Vector.sub(b.position, pos)), 10);
+                Body.applyForce(b, b.position, Vector.mult(forceDir, (250 / dist) * b.mass * 0.05));
+                if (b.health) applyDamage(b, 2000 / dist);
+            });
+        }
+
+        function activateSplitArrow() {
+            hasSplitUsed = true; Sfx.shoot();
+            let pos = currentArrowBody.position, vel = currentArrowBody.velocity;
+            World.remove(world, currentArrowBody);
+            for(let i = -1; i <= 1; i++) {
+                let newArrow = createArrowBody(pos.x, pos.y, 'normal');
+                Body.setVelocity(newArrow, { x: vel.x, y: vel.y + (i * 6) }); Body.setAngle(newArrow, Math.atan2(newArrow.velocity.y, newArrow.velocity.x));
+                World.add(world, newArrow); if(i === 0) currentArrowBody = newArrow;
+            }
+            createParticles(pos.x, pos.y, '#a855f7', 20);
+        }
+
+        function applyDamage(body, damage) {
+            if(!body.health) return;
+            body.health -= damage * (body.material === 'stone' ? 0.2 : (body.material === 'wood' ? 0.7 : 1.5)) * 4; 
+            if (body.health < body.maxHealth * 0.4) body.isDamaged = true;
+            if (body.health <= 0 && !body.isDestroyed) destroyEntity(body);
+        }
+
+        function destroyEntity(body) {
+            body.isDestroyed = true; createParticles(body.position.x, body.position.y, body.renderColor || '#fff', 15);
+            setTimeout(() => {
+                World.remove(world, body); entities = entities.filter(e => e.id !== body.id);
+                if (body.label === 'animal') { enemiesLeft--; addCoins(body.coinValue || 50); checkWinCondition(); } else { addCoins(2); }
+            }, 0);
+        }
+
+        function addCoins(amount) { coins += amount; document.getElementById('ui-coins').innerText = coins; if(amount > 10) Sfx.coin(); }
+
+        // --- GERAÇÃO DE NÍVEL SÓLIDA ---
+        function generateLevel(lvl) {
+            entities.forEach(e => World.remove(world, e)); entities = []; arrowTrails = []; particles = [];
+            if (currentArrowBody) World.remove(world, currentArrowBody); if (bowString) World.remove(world, bowString);
+
+            level = lvl; document.getElementById('ui-level').innerText = level;
+            arrowsLeft = Math.min(3 + Math.floor(level / 2), 8); document.getElementById('ui-arrows').innerText = arrowsLeft;
+            enemiesLeft = 0; cameraX = 0; targetCameraX = 0;
+            
+            isLevelSettling = true; setTimeout(() => { isLevelSettling = false; }, 1000);
+
+            const startX = width * 0.6; const endX = worldWidth - 300; const baseY = height - 50; 
+            let numStructures = Math.min(3 + level, 8); let spacing = (endX - startX) / numStructures;
+
+            for (let i = 0; i < numStructures; i++) {
+                let x = startX + (i * spacing) + (Math.random() * 60 - 30);
+                buildStructure(x, baseY, level);
+            }
+            bowAnchor = { x: width * 0.15, y: height - 200 };
+            spawnArrow(); gameState = 'idle';
+        }
+
+        function buildStructure(x, baseY, lvl) {
+            const mats = ['wood', 'wood', 'glass', 'stone']; let mat = mats[Math.min(Math.floor(Math.random() * (lvl+1)), 3)];
+            let bH = 100, bW = 20; let y1 = baseY - (bH/2); 
+            
+            createBlock(x - 40, y1, bW, bH, mat); createBlock(x + 40, y1, bW, bH, mat);
+            let roofY1 = baseY - bH - (20/2); createBlock(x, roofY1, 120, 20, mat);
+            spawnAnimal(x, baseY, lvl);
+
+            if (Math.random() > 0.3 || lvl > 3) {
+                let mat2 = mats[Math.min(Math.floor(Math.random() * lvl), 3)]; let y2 = roofY1 - (20/2) - (bH/2);
+                createBlock(x - 20, y2, bW, bH, mat2); createBlock(x + 20, y2, bW, bH, mat2);
+                let roofY2 = y2 - (bH/2) - (20/2); createBlock(x, roofY2, 80, 20, mat2);
+                spawnAnimal(x, roofY1 - (20/2), lvl);
+            }
+        }
+
+        function createBlock(x, y, w, h, material) {
+            let hp = material === 'stone' ? 400 : (material === 'wood' ? 150 : 50);
+            let color = material === 'stone' ? '#64748b' : (material === 'wood' ? '#b45309' : '#7dd3fc');
+            let block = Bodies.rectangle(x, y, w, h, { label: 'block', material: material, density: material === 'stone' ? 0.01 : 0.002, friction: 0.9, restitution: 0.1, health: hp, maxHealth: hp, renderColor: color, collisionFilter: { category: CAT_DEFAULT } });
+            block.w = w; block.h = h; World.add(world, block); entities.push(block);
+        }
+
+        function spawnAnimal(x, baseSupportY, lvl) {
+            let rNum = Math.random(); let type = 'wolf'; if (lvl > 2 && rNum > 0.4) type = 'boar'; if (lvl > 4 && rNum > 0.8) type = 'bear';
+            let r = type === 'bear' ? 24 : (type === 'boar' ? 20 : 16); let hp = type === 'bear' ? 200 : (type === 'boar' ? 100 : 50);
+            let animal = Bodies.circle(x, baseSupportY - r - 1, r, { label: 'animal', animalType: type, density: type === 'bear' ? 0.008 : 0.003, friction: 0.8, restitution: 0.2, health: hp, maxHealth: hp, coinValue: hp, collisionFilter: { category: CAT_DEFAULT } });
+            animal.r = r; World.add(world, animal); entities.push(animal); enemiesLeft++;
+        }
+
+        function createArrowBody(x, y, type) {
+            return Bodies.rectangle(x, y, 70, 8, { label: 'arrow', arrowType: type, density: 0.015, friction: 0.3, frictionAir: 0.005, restitution: 0.1, collisionFilter: { category: CAT_ARROW, mask: 0xFFFFFFFF } });
+        }
+
+        function spawnArrow() {
+            if (arrowsLeft <= 0) return; hasSplitUsed = false;
+            currentArrowBody = createArrowBody(bowAnchor.x, bowAnchor.y, equippedArrow);
+            bowString = Constraint.create({ pointA: bowAnchor, bodyB: currentArrowBody, stiffness: 0.08, damping: 0.01, length: 0 });
+            World.add(world, [currentArrowBody, bowString]); gameState = 'idle';
+        }
+
+        function shootArrow() {
+            let diff = Vector.sub(bowAnchor, currentArrowBody.position); let distance = Vector.magnitude(diff);
+            if (distance > 20) {
+                World.remove(world, bowString); bowString = null; Body.setVelocity(currentArrowBody, { x: 0, y: 0 }); 
+                Body.applyForce(currentArrowBody, currentArrowBody.position, Vector.mult(Vector.normalise(diff), distance * 0.002 * currentArrowBody.mass));
+                Sfx.shoot(); gameState = 'flying'; arrowsLeft--; document.getElementById('ui-arrows').innerText = arrowsLeft;
+            } else { gameState = 'idle'; }
+        }
+
+        function advanceTurn(arrowObj) {
+            gameState = 'waiting';
+            setTimeout(() => {
+                if(currentArrowBody === arrowObj) currentArrowBody = null;
+                if (enemiesLeft > 0) { if (arrowsLeft > 0) spawnArrow(); else gameOver(); }
+            }, 1500);
+        }
+
+        // --- SISTEMA DE PARTÍCULAS ---
+        function createParticles(x, y, color, count, type='normal') {
+            for(let i=0; i<count; i++) { particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * (type === 'explosion' ? 30 : 12), vy: (Math.random() - 0.5) * (type === 'explosion' ? 30 : 12), life: 1.0, color: color, size: Math.random() * 6 + 3, type: type }); }
+        }
+
+        function updateGame() {
+            if (gameState === 'flying' && currentArrowBody) {
+                if (currentArrowBody.speed > 5) {
+                    let c = arrowsData[currentArrowBody.arrowType].color;
+                    arrowTrails.push({x: currentArrowBody.position.x - Math.cos(currentArrowBody.angle)*35, y: currentArrowBody.position.y - Math.sin(currentArrowBody.angle)*35, alpha: 1, color: c});
+                    if (arrowTrails.length > 60) arrowTrails.shift();
+                }
+                let isOut = currentArrowBody.position.x > worldWidth || currentArrowBody.position.x < -200 || currentArrowBody.position.y > height + 200;
+                let isStopped = currentArrowBody.speed < 0.5 && Math.abs(currentArrowBody.angularVelocity) < 0.05;
+                
+                if (isOut || isStopped) {
+                    if (!currentArrowBody.stopTimer) currentArrowBody.stopTimer = 0;
+                    if (++currentArrowBody.stopTimer > 60 || isOut) { World.remove(world, currentArrowBody); advanceTurn(currentArrowBody); }
+                } else { currentArrowBody.stopTimer = 0; }
+            }
+
+            arrowTrails.forEach(t => t.alpha -= 0.04); arrowTrails = arrowTrails.filter(t => t.alpha > 0);
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.type === 'fire') { p.vy -= 0.1; p.x += (Math.random()-0.5)*2; } else p.vy += 0.5; 
+                p.life -= (p.type === 'explosion' ? 0.02 : 0.03);
+            });
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        // --- RENDERIZAÇÃO PREMIUM 2D ---
+        function drawParallax(ctx, w, h, camX) {
+            let sky = ctx.createLinearGradient(0, 0, 0, h);
+            sky.addColorStop(0, '#020617'); sky.addColorStop(1, '#1e293b');
+            ctx.fillStyle = sky; ctx.fillRect(0, 0, w, h);
+
+            let sunX = width * 0.8 - (camX*0.05);
+            let sunGrad = ctx.createRadialGradient(sunX, h*0.3, 0, sunX, h*0.3, 400);
+            sunGrad.addColorStop(0, 'rgba(251, 191, 36, 0.25)'); sunGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
+            ctx.fillStyle = sunGrad; ctx.globalCompositeOperation = 'screen'; ctx.fillRect(0,0,w,h); ctx.globalCompositeOperation = 'source-over';
+
+            ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.moveTo(0, h);
+            for(let x=0; x<=w; x+=100) { ctx.lineTo(x, h - 250 + Math.sin((x + camX*0.1)*0.005)*100); } ctx.lineTo(w, h); ctx.fill();
+
+            let mGrad = ctx.createLinearGradient(0, h-400, 0, h); mGrad.addColorStop(0, '#1e293b'); mGrad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = mGrad; ctx.beginPath(); ctx.moveTo(0, h);
+            for(let x=0; x<=w; x+=50) { ctx.lineTo(x, h - 150 + Math.sin((x + camX*0.3)*0.01)*60 + Math.cos((x + camX*0.3)*0.03)*20); } ctx.lineTo(w, h); ctx.fill();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, width, height); drawParallax(ctx, width, height, cameraX);
+            ctx.save(); ctx.translate(-cameraX, 0);
+
+            let gGrad = ctx.createLinearGradient(0, height-50, 0, height);
+            gGrad.addColorStop(0, '#064e3b'); gGrad.addColorStop(1, '#022c22');
+            ctx.fillStyle = gGrad; ctx.fillRect(0, height - 50, worldWidth, 50);
+
+            ctx.globalCompositeOperation = 'lighter';
+            arrowTrails.forEach(t => { ctx.fillStyle = t.color; ctx.globalAlpha = t.alpha * 0.8; ctx.beginPath(); ctx.arc(t.x, t.y, 6, 0, Math.PI * 2); ctx.fill(); });
+            ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
+
+            drawBow(true);
+            ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
+
+            entities.forEach(body => {
+                ctx.save(); ctx.translate(body.position.x, body.position.y); ctx.rotate(body.angle);
+                if (body.label === 'block') {
+                    if(patterns[body.material]) ctx.fillStyle = patterns[body.material]; else ctx.fillStyle = body.renderColor;
+                    ctx.fillRect(-body.w/2, -body.h/2, body.w, body.h);
+                    
+                    let insetGrad = ctx.createLinearGradient(-body.w/2, -body.h/2, body.w/2, body.h/2);
+                    insetGrad.addColorStop(0, 'rgba(255,255,255,0.15)'); insetGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
+                    ctx.fillStyle = insetGrad; ctx.fillRect(-body.w/2, -body.h/2, body.w, body.h);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = 1; ctx.strokeRect(-body.w/2, -body.h/2, body.w, body.h);
+
+                    if(body.isDamaged) { ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-body.w/3, -body.h/3); ctx.lineTo(10, 0); ctx.lineTo(-body.w/4, body.h/3); ctx.stroke(); }
+                    if(body.isOnFire) { ctx.fillStyle = 'rgba(249, 115, 22, 0.4)'; ctx.fillRect(-body.w/2, -body.h/2, body.w, body.h); }
+                } else if (body.label === 'animal') {
+                    drawAnimalPremium(ctx, body.r, body.animalType, body.isDamaged);
+                }
+                ctx.restore();
+            });
+
+            ctx.shadowColor = 'transparent';
+
+            if (currentArrowBody) {
+                ctx.save(); ctx.translate(currentArrowBody.position.x, currentArrowBody.position.y); ctx.rotate(currentArrowBody.angle);
+                drawArrowPremium(ctx, currentArrowBody.arrowType); ctx.restore();
+            }
+
+            if (gameState === 'dragging' && currentArrowBody) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 3; ctx.lineCap='round';
+                ctx.beginPath(); ctx.moveTo(bowAnchor.x, bowAnchor.y - 80); ctx.lineTo(currentArrowBody.position.x - 30, currentArrowBody.position.y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(bowAnchor.x, bowAnchor.y + 80); ctx.lineTo(currentArrowBody.position.x - 30, currentArrowBody.position.y); ctx.stroke();
+            } else if (gameState === 'idle') {
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(bowAnchor.x, bowAnchor.y - 80); ctx.lineTo(bowAnchor.x, bowAnchor.y + 80); ctx.stroke();
+            }
+            drawBow(false);
+
+            ctx.globalCompositeOperation = 'lighter';
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); });
+            ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0;
+
+            ctx.restore();
+        }
+
+        function drawBow(isBack) {
+            if(!bowAnchor) return;
+            ctx.save();
+            let bowGrad = ctx.createLinearGradient(bowAnchor.x-20, bowAnchor.y-80, bowAnchor.x+20, bowAnchor.y+80);
+            bowGrad.addColorStop(0, '#f59e0b'); bowGrad.addColorStop(0.5, '#78350f'); bowGrad.addColorStop(1, '#451a03');
+            ctx.strokeStyle = bowGrad; ctx.lineWidth = 14; ctx.lineCap = 'round';
+            if(!isBack) {
+                ctx.beginPath(); ctx.arc(bowAnchor.x - 20, bowAnchor.y, 80, -Math.PI/3, Math.PI/3); ctx.stroke();
+                ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(bowAnchor.x - 20, bowAnchor.y, 80, -Math.PI/10, Math.PI/10); ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // Flecha Premium Corrigida (Ponta Única Sólida)
+        function drawArrowPremium(ctx, type) {
+            let color = arrowsData[type].color;
+            ctx.fillStyle = '#451a03'; ctx.fillRect(-35, -3, 60, 6); // Haste
+            
+            let pGrad = ctx.createLinearGradient(-35, -12, -35, 12);
+            pGrad.addColorStop(0, color); pGrad.addColorStop(0.5, '#fff'); pGrad.addColorStop(1, color);
+            ctx.fillStyle = pGrad;
+            ctx.beginPath(); ctx.moveTo(-35, -3); ctx.lineTo(-45, -12); ctx.lineTo(-20, -3); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-35, 3); ctx.lineTo(-45, 12); ctx.lineTo(-20, 3); ctx.fill();
+            
+            ctx.shadowBlur = type === 'normal' ? 0 : 15; ctx.shadowColor = color;
+            let tipGrad = ctx.createLinearGradient(25, -6, 25, 6);
+            if(type === 'fire') { tipGrad.addColorStop(0, '#f97316'); tipGrad.addColorStop(1, '#ef4444'); }
+            else if(type === 'ice') { tipGrad.addColorStop(0, '#e0f2fe'); tipGrad.addColorStop(1, '#38bdf8'); }
+            else { tipGrad.addColorStop(0, '#94a3b8'); tipGrad.addColorStop(1, '#f1f5f9'); }
+            
+            ctx.fillStyle = tipGrad;
+            ctx.beginPath(); ctx.moveTo(25, -5); ctx.lineTo(45, 0); ctx.lineTo(25, 5); ctx.closePath(); ctx.fill(); // Ponta única em triângulo afiado
+            ctx.shadowBlur = 0;
+        }
+
+        function drawAnimalPremium(ctx, r, type, damaged) {
+            let bodyGrad = ctx.createRadialGradient(0, -r/3, 0, 0, 0, r);
+            let baseC = damaged ? '#ef4444' : (type === 'bear' ? '#92400e' : (type === 'boar' ? '#52525b' : '#cbd5e1'));
+            let darkC = damaged ? '#7f1d1d' : (type === 'bear' ? '#451a03' : (type === 'boar' ? '#27272a' : '#475569'));
+            
+            bodyGrad.addColorStop(0, baseC); bodyGrad.addColorStop(1, darkC); ctx.fillStyle = bodyGrad;
+            
+            ctx.beginPath();
+            for(let i=0; i<Math.PI*2; i+=0.5) { let noise = (Math.random()*2 - 1) * (type==='wolf'?3:1); ctx.lineTo(Math.cos(i)*(r+noise), Math.sin(i)*(r+noise)); }
+            ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = darkC; ctx.stroke();
+
+            ctx.fillStyle = darkC;
+            if(type === 'wolf') {
+                ctx.beginPath(); ctx.moveTo(-r/2, -r+5); ctx.lineTo(-r, -r-10); ctx.lineTo(-r/2, -r/2); ctx.fill(); 
+                ctx.beginPath(); ctx.moveTo(r/2, -r+5); ctx.lineTo(r, -r-10); ctx.lineTo(r/2, -r/2); ctx.fill();
+                ctx.beginPath(); ctx.arc(0, r/4, r/3, 0, Math.PI*2); ctx.fill();
+            } else if (type === 'boar') {
+                ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.moveTo(-r/2, r/4); ctx.lineTo(-r-5, r); ctx.lineTo(-r/4, r/2); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(r/2, r/4); ctx.lineTo(r+5, r); ctx.lineTo(r/4, r/2); ctx.fill();
+                ctx.fillStyle = darkC; ctx.beginPath(); ctx.ellipse(0, r/3, r/1.5, r/3, 0, 0, Math.PI*2); ctx.fill(); 
+            } else if (type === 'bear') {
+                ctx.beginPath(); ctx.arc(-r/1.5, -r/1.5, r/3, 0, Math.PI*2); ctx.fill(); 
+                ctx.beginPath(); ctx.arc(r/1.5, -r/1.5, r/3, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = baseC; ctx.beginPath(); ctx.arc(0, r/4, r/2, 0, Math.PI*2); ctx.fill();
+            }
+
+            ctx.fillStyle = damaged ? 'black' : 'white'; let eyeY = -r/4;
+            ctx.beginPath(); ctx.ellipse(-r/2.5, eyeY, r/4, r/6, Math.PI/8, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(r/2.5, eyeY, r/4, r/6, -Math.PI/8, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = damaged ? 'white' : 'red';
+            ctx.beginPath(); ctx.arc(-r/2.5, eyeY, r/10, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(r/2.5, eyeY, r/10, 0, Math.PI*2); ctx.fill();
+        }
+
+        // --- FLUXOS DO JOGO ---
+        function checkWinCondition() { if (enemiesLeft <= 0 && gameState !== 'win') { gameState = 'win'; setTimeout(() => { let bns = arrowsLeft * 150; addCoins(bns); document.getElementById('level-title').innerText = 'Área Limpa!'; document.getElementById('level-title').style.color = '#e0f2fe'; document.getElementById('level-desc').innerText = `+${bns} 💰 Ouro por munição poupada!`; document.getElementById('level-menu').classList.remove('hidden'); }, 1500); } }
+        function gameOver() { gameState = 'over'; document.getElementById('level-title').innerText = 'Fim da Caçada'; document.getElementById('level-title').style.color = '#ef4444'; document.getElementById('level-desc').innerText = 'Munição Esgotada.'; document.getElementById('level-menu').classList.remove('hidden'); }
+        window.nextLevel = function() { document.getElementById('level-menu').classList.add('hidden'); if(gameState === 'win') generateLevel(level + 1); else generateLevel(level); };
+        window.openShop = function() { getAudio(); updateShopUI(); document.getElementById('shop-menu').classList.remove('hidden'); };
+        window.closeShop = function() { document.getElementById('shop-menu').classList.add('hidden'); if (gameState === 'idle' && currentArrowBody && currentArrowBody.arrowType !== equippedArrow) { World.remove(world, currentArrowBody); if(bowString) World.remove(world, bowString); spawnArrow(); } };
+
+        function gameLoop() { updateGame(); draw(); requestAnimationFrame(gameLoop); }
+
+        window.onload = () => { initSystems(); updateShopUI(); generateLevel(1); };
+    </script>
+</body>
+</html>
